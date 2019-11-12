@@ -28,11 +28,10 @@ class vectorize(np.vectorize):
 		return functools.partial(self.__call__, obj)
 
 
-
 class HaloConcentration(object):
 	def __init__(self, z):
-		self.f = interp1d(np.linspace(9,15,200), \
-             concentration.concentration(10**np.linspace(9, 15, 200), "vir", z, model="bullock01"))
+		self.f = interp1d(np.linspace(9,15.1,200), \
+        	concentration.concentration(10**np.linspace(9, 15.1, 200), "vir", z, model="bullock01"))
 
 
 	def haloConcentration(self, m):

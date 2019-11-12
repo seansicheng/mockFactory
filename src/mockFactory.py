@@ -2,39 +2,7 @@ import time
 import pandas as pd
 import numpy as np
 from parameters import *
-from utils import timeWrapper, vectorize, HaloConcentration
-
-
-
-def NFWDensity(r, rs, ps):
-	return ps * rs / (r*(1+r/rs)*(1+r/rs))
-
-
-def NFWPosition(rvir, cvir):
-	rs = rvir/cvir
-	max_p = NFWDensity(rs,rs,1.0)*rs*rs*4.0*np.pi
-	it = 0
-	while True:
-		it += 1
-		r = np.random.rand() * rvir
-		pr = NFWDensity(r,rs,1.0)*r*r*4.0*np.pi / max_p
-
-		if np.random.rand() <= pr:
-			#print(it)
-			costheta = 2.0*np.random.rand() - 1
-			sintheta = np.sqrt(1-costheta**2)
-			phi = 2*np.pi*np.random.rand()
-
-			return [r*sintheta*np.cos(phi), r*sintheta*np.sin(phi), r*costheta]
-
-
-
-def NFWVelocity(m):
-	fac = np.sqrt(4.499e-48) * pow(4.0*DELTA_HALO*np.pi*OMEGA_M*RHO_CRIT/3, 1.0/6.0) * 3.09e19
-	sigv = fac * pow(m,1.0/3.0) / np.sqrt(2.0)
-	return np.random.randn(3)*sigv
-
-
+from utils import timeWrapper, HaloConcentration
 
 
 class MockFactory(object):
@@ -42,7 +10,7 @@ class MockFactory(object):
 		docstring for MockFactory
 	"""
 
-	def __init__(self, halofile, boxsize, VBIAS_C=1, VBIAS=1):
+	def __init__(self, halofile, boxsize, vbias_c=1, vbias=1):
 
 		"""
 			input:
@@ -54,8 +22,8 @@ class MockFactory(object):
 
 		self.halofile = halofile
 		self.boxsize = boxsize
-		self.VBIAS_C = VBIAS_C
-		self.VBIAS = VBIAS
+		self.vbias_c = vbias_c
+		self.vbias = vbias
 
 		now = time.time()
 		print("[{}] Reading halo file {} ...".format(self.__class__.__name__, halofile))
@@ -72,6 +40,7 @@ class MockFactory(object):
 		
 		#self.halos.columns = ["M200b", "x", "y", "z", "vx", "vy", "vz"]
 		
+		print("[{}] Computing halo concentration ...".format(self.__class__.__name__))
 		hc = HaloConcentration(z=0.84)
 		self.cvir = hc.haloConcentration(self.halos[:,0])
 		self.rvir = pow(3*self.halos[:,0] / (4*DELTA_HALO*np.pi*RHO_CRIT*OMEGA_M), 1.0/3.0)
@@ -82,17 +51,44 @@ class MockFactory(object):
 
 
 
+	@staticmethod
+	def NFWVelocity(m):
+		fac = np.sqrt(4.499e-48) * pow(4.0*DELTA_HALO*np.pi*OMEGA_M*RHO_CRIT/3, 1.0/6.0) * 3.09e19
+		sigv = fac * pow(m,1.0/3.0) / np.sqrt(2.0)
+		return np.random.randn(3)*sigv
+
 	def NFWCenVelocity(self, m):
-		return NFWVelocity(m) * self.VBIAS_C
+		return self.NFWVelocity(m) * self.vbias_c
 
 	def NFWSatVelocity(self, m):
-		return NFWVelocity(m) * self.VBIAS
+		return self.NFWVelocity(m) * self.vbias
 
 	def position_adjust(self, x):
 		x[x > self.boxsize] -= self.boxsize
 		x[x < 0] += self.boxsize
 		return
 
+	@staticmethod
+	def NFWDensity(r, rs, ps):
+		return ps * rs / (r*(1+r/rs)*(1+r/rs))
+
+	@staticmethod
+	def NFWPosition(rvir, cvir):
+		rs = rvir/cvir
+		max_p = self.NFWDensity(rs,rs,1.0)*rs*rs*4.0*np.pi
+		it = 0
+		while True:
+			it += 1
+			r = np.random.rand() * rvir
+			pr = self.NFWDensity(r,rs,1.0)*r*r*4.0*np.pi / max_p
+
+			if np.random.rand() <= pr:
+				#print(it)
+				costheta = 2.0*np.random.rand() - 1
+				sintheta = np.sqrt(1-costheta**2)
+				phi = 2*np.pi*np.random.rand()
+
+				return [r*sintheta*np.cos(phi), r*sintheta*np.sin(phi), r*costheta]
 
 
 	@timeWrapper
@@ -118,9 +114,8 @@ class MockFactory(object):
 		t = time.time()
 		for i in self.index[Nsat != 0]:
 			for j in range(Nsat[i]):
-				r = NFWPosition(self.rvir[i], self.cvir[i])
+				r = self.NFWPosition(self.rvir[i], self.cvir[i])
 				vg = self.NFWSatVelocity(self.halos[i, 0])
-				#r, vg = [0,0,0], [0,0,0]
 				xg.append(self.halos[i, 1]+r[0])
 				yg.append(self.halos[i, 2]+r[1])
 				zg.append(self.halos[i, 3]+r[2])
@@ -137,9 +132,6 @@ class MockFactory(object):
 		self.position_adjust(sat_mock[:,3])
 
 		return sat_mock
-
-
-
 
 	@timeWrapper
 	def populateSimulationHOD(self, hod, mock_flnm = None):
