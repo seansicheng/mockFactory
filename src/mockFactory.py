@@ -59,21 +59,24 @@ class MockFactory(object):
 
 		now = time.time()
 		print("[{}] Reading halo file {} ...".format(self.__class__.__name__, halofile))
-		self.halos = pd.read_table(self.halofile, header=None, delimiter=' ')
+		self.halos = pd.read_table(self.halofile, header=None, delimiter=' ').values
 		print("[{}] Done reading halo file, time cost {:.2f}s ...".format(self.__class__.__name__, time.time() - now))
 
 
+		print("[{}] Adjusting position ...".format(self.__class__.__name__))
+		self.halos[:,1] = np.array(list(map(self.position_adjust, self.halos[:,1])))
+		self.halos[:,2] = np.array(list(map(self.position_adjust, self.halos[:,2])))
+		self.halos[:,3] = np.array(list(map(self.position_adjust, self.halos[:,3])))
+		print("[{}] Done adjusting position ...".format(self.__class__.__name__))
+		
+		#self.halos.columns = ["M200b", "x", "y", "z", "vx", "vy", "vz"]
+		
 		
 
-		self.halos.columns = ["M200b", "x", "y", "z", "vx", "vy", "vz"]
-		print("[{}] Adjusting position ...".format(self.__class__.__name__))
-		for coord in ["x", "y", "z"]:
-			self.halos[coord] = self.halos[coord].apply(self.position_adjust)
-		print("[{}] Done adjusting position ...".format(self.__class__.__name__))
-
-
 		self.halolength = len(self.halos)
+		self.index = np.arange(self.halolength)
 		print("[{}] Read {} halos ...".format(self.__class__.__name__, self.halolength))
+
 
 
 	def NFWCenVelocity(self, m):
@@ -94,43 +97,39 @@ class MockFactory(object):
 
 	@timeWrapper
 	def populateCentral(self, hod):
-		Ncen = np.array([hod.N_cen(m) for m in self.halos["M200b"].values])
+		Ncen = np.array([hod.N_cen(m) for m in self.halos[:,0]])
 		rand = np.random.rand(self.halolength)
-		cen_mock = self.halos[Ncen > rand]
-		print(cen_mock["M200b"].values)
-		vg = np.array([self.NFWCenVelocity(m) for m in cen_mock["M200b"].values])
-		cen_mock["vx"] += vg[:,0]
-		cen_mock["vy"] += vg[:,1]
-		cen_mock["vz"] += vg[:,2]
-
-		cen_mock["cen_sat"] = 0
+		cen_mock = np.copy(self.halos[Ncen > rand])
+		print("number of central is {}".format(len(cen_mock)))
+		vg = np.array([self.NFWCenVelocity(m) for m in cen_mock[:,0]])
+		cen_mock[:,4] += vg[:,0]
+		cen_mock[:,5] += vg[:,1]
+		cen_mock[:,6] += vg[:,2]
 
 		return cen_mock
 
 
 	@timeWrapper
 	def populateSatellite(self, hod):
-		Nsat = self.halos["M200b"].apply(lambda m: np.random.poisson(hod.N_sat(m)))
+		Nsat = np.array([np.random.poisson(hod.N_sat(m)) for m in self.halos[:,0]])
 		print("assign position and velocity...")
 		xg, yg, zg, vxg, vyg, vzg, mass = [], [], [], [], [], [], []
 		print("number of satellite is {}".format(sum(Nsat)))
-		count = 0
-		for i in range(self.halolength):
+		for i in self.index[Nsat != 0]:
 			for j in range(Nsat[i]):
-				r = NFWPosition(self.halos.M200b[i])
-				vg = self.NFWSatVelocity(self.halos.M200b[i])
-				xg.append(self.position_adjust(self.halos.x[i]+r[0]))
-				yg.append(self.position_adjust(self.halos.y[i]+r[1]))
-				zg.append(self.position_adjust(self.halos.z[i]+r[2]))
+				r = NFWPosition(self.halos[i, 0])
+				vg = self.NFWSatVelocity(self.halos[i, 0])
+				xg.append(self.position_adjust(self.halos[i, 1]+r[0]))
+				yg.append(self.position_adjust(self.halos[i, 2]+r[1]))
+				zg.append(self.position_adjust(self.halos[i, 3]+r[2]))
 
-				vxg.append(self.halos.vx[i]+vg[0])
-				vyg.append(self.halos.vy[i]+vg[1])
-				vzg.append(self.halos.vz[i]+vg[2])
+				vxg.append(self.halos[i, 4]+vg[0])
+				vyg.append(self.halos[i, 5]+vg[1])
+				vzg.append(self.halos[i, 6]+vg[2])
 
-				mass.append(self.halos.M200b[i])
+				mass.append(self.halos[i, 0])
 
-		sat_mock = pd.DataFrame({"M200b":mass, "x":xg, "y":yg, "z":zg, "vx":vxg, "vy":vyg, "vz":vzg})
-		sat_mock["cen_sat"] = 1
+		sat_mock = np.array([mass, xg, yg, zg, vxg, vyg, vzg]).T
 
 		return sat_mock
 
@@ -145,10 +144,10 @@ class MockFactory(object):
 				hod is an instance of HOD class
 				mock_flnm is the output mock filename
 		"""
-		mock = pd.concat([self.populateCentral(hod), self.populateSatellite(hod)])
+		mock = np.concatenate([self.populateCentral(hod), self.populateSatellite(hod)])
 		if mock_flnm:
 			print("Writing to csv ...")
-			mock.to_csv(mock_flnm, index=False)
+			np.savetxt(mock_flnm, mock, fmt="%.5f")
 
 		return mock
 
