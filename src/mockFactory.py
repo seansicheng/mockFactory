@@ -2,25 +2,25 @@ import time
 import pandas as pd
 import numpy as np
 from parameters import *
-from utils import timeWrapper, vectorize, haloConcentration
+from utils import timeWrapper, vectorize, HaloConcentration
+
 
 
 def NFWDensity(r, rs, ps):
 	return ps * rs / (r*(1+r/rs)*(1+r/rs))
 
 
-@vectorize
-def NFWPosition(m):
-	cvir = haloConcentration(m)
-	rvir = pow(3*m / (4*DELTA_HALO*np.pi*RHO_CRIT*OMEGA_M), 1.0/3.0)
+def NFWPosition(rvir, cvir):
 	rs = rvir/cvir
 	max_p = NFWDensity(rs,rs,1.0)*rs*rs*4.0*np.pi
-
+	it = 0
 	while True:
+		it += 1
 		r = np.random.rand() * rvir
 		pr = NFWDensity(r,rs,1.0)*r*r*4.0*np.pi / max_p
 
 		if np.random.rand() <= pr:
+			#print(it)
 			costheta = 2.0*np.random.rand() - 1
 			sintheta = np.sqrt(1-costheta**2)
 			phi = 2*np.pi*np.random.rand()
@@ -61,17 +61,20 @@ class MockFactory(object):
 		print("[{}] Reading halo file {} ...".format(self.__class__.__name__, halofile))
 		self.halos = pd.read_table(self.halofile, header=None, delimiter=' ').values
 		print("[{}] Done reading halo file, time cost {:.2f}s ...".format(self.__class__.__name__, time.time() - now))
-
+		print("MAX HALOMASS {}".format(np.log10(max(self.halos[:,0]))))
+		print("MAX HALOMASS {}".format(np.log10(min(self.halos[:,0]))))
 
 		print("[{}] Adjusting position ...".format(self.__class__.__name__))
-		self.halos[:,1] = np.array(list(map(self.position_adjust, self.halos[:,1])))
-		self.halos[:,2] = np.array(list(map(self.position_adjust, self.halos[:,2])))
-		self.halos[:,3] = np.array(list(map(self.position_adjust, self.halos[:,3])))
+		self.position_adjust(self.halos[:,1])
+		self.position_adjust(self.halos[:,2])
+		self.position_adjust(self.halos[:,3])
 		print("[{}] Done adjusting position ...".format(self.__class__.__name__))
 		
 		#self.halos.columns = ["M200b", "x", "y", "z", "vx", "vy", "vz"]
 		
-		
+		hc = HaloConcentration(z=0.84)
+		self.cvir = hc.haloConcentration(self.halos[:,0])
+		self.rvir = pow(3*self.halos[:,0] / (4*DELTA_HALO*np.pi*RHO_CRIT*OMEGA_M), 1.0/3.0)
 
 		self.halolength = len(self.halos)
 		self.index = np.arange(self.halolength)
@@ -86,18 +89,15 @@ class MockFactory(object):
 		return NFWVelocity(m) * self.VBIAS
 
 	def position_adjust(self, x):
-		if x > self.boxsize:
-			return x - self.boxsize
-		elif x < 0:
-			return x + self.boxsize
-		else:
-			return x
+		x[x > self.boxsize] -= self.boxsize
+		x[x < 0] += self.boxsize
+		return
 
 
 
 	@timeWrapper
 	def populateCentral(self, hod):
-		Ncen = np.array([hod.N_cen(m) for m in self.halos[:,0]])
+		Ncen = hod.N_cen(self.halos[:,0])
 		rand = np.random.rand(self.halolength)
 		cen_mock = np.copy(self.halos[Ncen > rand])
 		print("number of central is {}".format(len(cen_mock)))
@@ -111,25 +111,30 @@ class MockFactory(object):
 
 	@timeWrapper
 	def populateSatellite(self, hod):
-		Nsat = np.array([np.random.poisson(hod.N_sat(m)) for m in self.halos[:,0]])
+		Nsat = np.random.poisson(hod.N_sat(self.halos[:,0]))
 		print("assign position and velocity...")
 		xg, yg, zg, vxg, vyg, vzg, mass = [], [], [], [], [], [], []
 		print("number of satellite is {}".format(sum(Nsat)))
+		t = time.time()
 		for i in self.index[Nsat != 0]:
 			for j in range(Nsat[i]):
-				r = NFWPosition(self.halos[i, 0])
+				r = NFWPosition(self.rvir[i], self.cvir[i])
 				vg = self.NFWSatVelocity(self.halos[i, 0])
-				xg.append(self.position_adjust(self.halos[i, 1]+r[0]))
-				yg.append(self.position_adjust(self.halos[i, 2]+r[1]))
-				zg.append(self.position_adjust(self.halos[i, 3]+r[2]))
+				#r, vg = [0,0,0], [0,0,0]
+				xg.append(self.halos[i, 1]+r[0])
+				yg.append(self.halos[i, 2]+r[1])
+				zg.append(self.halos[i, 3]+r[2])
 
 				vxg.append(self.halos[i, 4]+vg[0])
 				vyg.append(self.halos[i, 5]+vg[1])
 				vzg.append(self.halos[i, 6]+vg[2])
 
 				mass.append(self.halos[i, 0])
-
+		print("for loop takes {:.2f} s".format(time.time() - t))
 		sat_mock = np.array([mass, xg, yg, zg, vxg, vyg, vzg]).T
+		self.position_adjust(sat_mock[:,1])
+		self.position_adjust(sat_mock[:,2])
+		self.position_adjust(sat_mock[:,3])
 
 		return sat_mock
 
