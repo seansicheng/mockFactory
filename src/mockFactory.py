@@ -10,7 +10,7 @@ class MockFactory(object):
 		docstring for MockFactory
 	"""
 
-	def __init__(self, halofile, boxsize, vbias_c=1, vbias=1):
+	def __init__(self, halofile, boxsize, vbias_c=0, vbias=0, cvir_fac=1):
 
 		"""
 			input:
@@ -24,6 +24,7 @@ class MockFactory(object):
 		self.boxsize = boxsize
 		self.vbias_c = vbias_c
 		self.vbias = vbias
+		self.cvir_fac = cvir_fac
 
 		now = time.time()
 		print("[{}] Reading halo file {} ...".format(self.__class__.__name__, halofile))
@@ -42,7 +43,7 @@ class MockFactory(object):
 		
 		print("[{}] Computing halo concentration ...".format(self.__class__.__name__))
 		hc = HaloConcentration(z=0.84)
-		self.cvir = hc.haloConcentration(self.halos[:,0])
+		self.cvir = hc.haloConcentration(self.halos[:,0]) * self.cvir_fac
 		self.rvir = pow(3*self.halos[:,0] / (4*DELTA_HALO*np.pi*RHO_CRIT*OMEGA_M), 1.0/3.0)
 
 		self.halolength = len(self.halos)
@@ -57,13 +58,13 @@ class MockFactory(object):
 		sigv = fac * pow(m,1.0/3.0) / np.sqrt(2.0)
 		return np.random.randn(3)*sigv
 
-	@classmethod
-	def NFWCenVelocity(cls, m):
-		return cls.NFWVelocity(m) * self.vbias_c
 
-	@classmethod
-	def NFWSatVelocity(cls, m):
-		return cls.NFWVelocity(m) * self.vbias
+	def NFWCenVelocity(self, m):
+		return self.NFWVelocity(m) * (1 + self.vbias_c)
+
+
+	def NFWSatVelocity(self, m):
+		return self.NFWVelocity(m) * (1 + self.vbias)
 
 	def position_adjust(self, x):
 		x[x > self.boxsize] -= self.boxsize
