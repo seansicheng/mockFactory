@@ -57,11 +57,13 @@ class MockFactory(object):
 		sigv = fac * pow(m,1.0/3.0) / np.sqrt(2.0)
 		return np.random.randn(3)*sigv
 
-	def NFWCenVelocity(self, m):
-		return self.NFWVelocity(m) * self.vbias_c
+	@classmethod
+	def NFWCenVelocity(cls, m):
+		return cls.NFWVelocity(m) * self.vbias_c
 
-	def NFWSatVelocity(self, m):
-		return self.NFWVelocity(m) * self.vbias
+	@classmethod
+	def NFWSatVelocity(cls, m):
+		return cls.NFWVelocity(m) * self.vbias
 
 	def position_adjust(self, x):
 		x[x > self.boxsize] -= self.boxsize
@@ -72,15 +74,15 @@ class MockFactory(object):
 	def NFWDensity(r, rs, ps):
 		return ps * rs / (r*(1+r/rs)*(1+r/rs))
 
-	@staticmethod
-	def NFWPosition(rvir, cvir):
+	@classmethod
+	def NFWPosition(cls, rvir, cvir):
 		rs = rvir/cvir
-		max_p = self.NFWDensity(rs,rs,1.0)*rs*rs*4.0*np.pi
+		max_p = cls.NFWDensity(rs,rs,1.0)*rs*rs*4.0*np.pi
 		it = 0
 		while True:
 			it += 1
 			r = np.random.rand() * rvir
-			pr = self.NFWDensity(r,rs,1.0)*r*r*4.0*np.pi / max_p
+			pr = cls.NFWDensity(r,rs,1.0)*r*r*4.0*np.pi / max_p
 
 			if np.random.rand() <= pr:
 				#print(it)
