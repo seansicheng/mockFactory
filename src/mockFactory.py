@@ -60,11 +60,11 @@ class MockFactory(object):
 
 
 	def NFWCenVelocity(self, m):
-		return self.NFWVelocity(m) * (1 + self.vbias_c)
+		return self.NFWVelocity(m) * self.vbias_c
 
 
 	def NFWSatVelocity(self, m):
-		return self.NFWVelocity(m) * (1 + self.vbias)
+		return self.NFWVelocity(m) * self.vbias
 
 	def position_adjust(self, x):
 		x[x > self.boxsize] -= self.boxsize
@@ -98,19 +98,24 @@ class MockFactory(object):
 	def populateCentral(self, hod):
 		Ncen = hod.N_cen(self.halos[:,0])
 		rand = np.random.rand(self.halolength)
-		cen_mock = np.copy(self.halos[Ncen > rand])
+		cen_mock = np.zeros((len(self.halos[Ncen > rand]), 8))
+		cen_mock[:,:-1] = self.halos[Ncen > rand]
 		print("number of central is {}".format(len(cen_mock)))
 		vg = np.array([self.NFWCenVelocity(m) for m in cen_mock[:,0]])
 		cen_mock[:,4] += vg[:,0]
 		cen_mock[:,5] += vg[:,1]
 		cen_mock[:,6] += vg[:,2]
+		cen_mock[:,7] = 1
 
 		return cen_mock
 
 
 	@timeWrapper
 	def populateSatellite(self, hod):
-		Nsat = np.random.poisson(hod.N_sat(self.halos[:,0]))
+		Nsat = np.zeros(self.halolength).astype(int)
+		nsat = hod.N_sat(self.halos[:,0])
+		Nsat[nsat != 0] = np.random.poisson(nsat[nsat!=0])
+		#Nsat = Nsat.astype(int)
 		print("assign position and velocity...")
 		xg, yg, zg, vxg, vyg, vzg, mass = [], [], [], [], [], [], []
 		print("number of satellite is {}".format(sum(Nsat)))
@@ -129,7 +134,7 @@ class MockFactory(object):
 
 				mass.append(self.halos[i, 0])
 		print("for loop takes {:.2f} s".format(time.time() - t))
-		sat_mock = np.array([mass, xg, yg, zg, vxg, vyg, vzg]).T
+		sat_mock = np.array([mass, xg, yg, zg, vxg, vyg, vzg, [0]*len(mass)]).T
 		self.position_adjust(sat_mock[:,1])
 		self.position_adjust(sat_mock[:,2])
 		self.position_adjust(sat_mock[:,3])

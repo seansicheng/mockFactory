@@ -38,7 +38,7 @@ class HOD(object):
 		return ncen
 
 	def N_sat(self, M):
-		nsat = ((M - self._params["M_cut"])/ self._params["M_1"])**self._params["alpha"]
-		nsat[M < self._params["M_cut"]] = 0
+		nsat = np.zeros(len(M))
+		nsat[M >= self._params["M_cut"]] = ((M[M >= self._params["M_cut"]] - self._params["M_cut"])/ self._params["M_1"])**self._params["alpha"]
 		return nsat
 
