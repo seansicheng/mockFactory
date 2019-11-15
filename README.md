@@ -46,7 +46,7 @@ MAX HALOMASS 9.478681907362235
 [MockFactory] Read 1213430 halos ...
 [MockFactory] memory used 92.5774 Mb ...
 ```
-### Populate mock. 
+### Populate mock
 If you don't pass mock_flnm into the function, it will not write to file.
 ```python
 mockfile = "../data/mock_test.dat"
@@ -72,4 +72,18 @@ mock.shape
 ```
 ```
 (5823, 8)
+```
+
+## Clustering
+You can compute clustering as follows:
+```python
+from clustering import Clustering
+import numpy as np
+
+rbins = np.logspace(np.log10(0.1), np.log10(70), 21)
+cluster = Clustering(rbins)
+```
+The input mock should have first 6 columns as x, y, z, vx, vy, vz.
+```python
+xi0, xi2, wp = cluster.xi_wp_cubic_mock(mock[:,1:], size=1000, verbose=True)
 ```
