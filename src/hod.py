@@ -76,7 +76,7 @@ class HOD(BaseHOD):
 				lower_mass = np.log10(self._params["M_min"])
 			else:
 				upper_mass = np.log10(self._params["M_min"])
-		print("[HOD] find M_min = {:.4f}".format(self._params["M_min"]))
+		print("[HOD] find log10(M_min) = {:.4f}".format(np.log10(self._params["M_min"])))
 		return
 
 	def update_parameters(self, quantities, values):

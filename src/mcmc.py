@@ -2,7 +2,7 @@ import emcee
 from mockFactory import MockFactory
 import numpy as np 
 from clustering import Clustering
-
+from multiprocessing import Pool
 
 class MCMC(object):
 	def __init__(self):
@@ -11,13 +11,11 @@ class MCMC(object):
 		filename = "tutorial.h5"
 		backend = emcee.backends.HDFBackend(filename)
 		backend.reset(self.nwalkers, self.ndim)
-		self.sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, self.log_prob, backend=backend)
-
-		# mock factory
+		
 		hod_params = {"M_min": 0, "galaxy_density": 0.00057, "boxsize": 1000, "log_halo_mass_bins": np.arange(10,15,0.1), \
-				"halo_histo": np.loadtxt("../../HAM/data/HOD/halo_central_histo.dat")}
-		halofile = "../data/halo_test.dat"
-		self.mockfactory = MockFactory(halofile, boxsize=1000, cvir_fac=0.1, hod_parameters=hod_params)
+				"halo_histo": np.loadtxt("../data/halo_central_histo.dat")}
+		halofile = "../../ELG_HOD_optimization/data/halo_M200b_0.54980_for_mock.dat"
+		self.mockfactory = MockFactory(halofile, boxsize=1000, cvir_fac=1, hod_parameters=hod_params)
 
 		# clustering calculator
 		rbins = np.logspace(np.log10(0.1), np.log10(70), 21)
@@ -26,6 +24,13 @@ class MCMC(object):
 		# read xi and wp from data, read cov matrix
 		self.clustering_data = np.loadtxt("../data/clustering_data.dat")
 		self.scaled_cov = np.loadtxt("../data/scaled_cov.dat")
+
+		#with Pool(10) as pool:
+		#	self.sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, self.log_prob, backend=backend, pool = pool)
+		#	self.run()
+
+		self.sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, self.log_prob, backend=backend)
+		self.run()
 
 	def get_prior(self):
 		"""
@@ -43,12 +48,14 @@ class MCMC(object):
 		for key, val in zip(["alpha", "f_max", "sigma_logM", "vbias", "cvir_fac"], params[2:]):
 			p[key] = val
 		self.mockfactory.update_params(p)
-		mock = self.mockfactory.populateSimulation(verbose=False)
+		mock = self.mockfactory.populateSimulation(verbose=True)
 		xi0, xi2, wp = self.cluster.xi_wp_cubic_mock(mock[:, 1:], size=1000)
 		clustering_mock = np.concatenate([xi0[3:], xi2[3:], wp[3:]])
 
 		diff = self.clustering_data - clustering_mock
-		return -0.5*np.dot(diff, np.linalg.solve(self.scaled_cov,diff))
+		res = -0.5*np.dot(diff, np.linalg.solve(self.scaled_cov,diff))
+		print("[MCMC] log prob: {}".format(res))
+		return res
 		
 
 	def run(self, iteration = 100):
@@ -58,4 +65,3 @@ class MCMC(object):
 
 if __name__ == '__main__':
 	mcmc = MCMC()
-	mcmc.run()

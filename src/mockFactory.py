@@ -43,6 +43,7 @@ class MockFactory(object):
 		self.halolength = len(self.halos)
 		self.index = np.arange(self.halolength)
 		print("[{}] Read {} halos ...".format(self.__class__.__name__, self.halolength))
+		print("[{}] memory used {:.4f} Mb ...".format(self.__class__.__name__, (self.halos.nbytes + self.cvir.nbytes + self.rvir.nbytes + self.index.nbytes)/1024/1024))
 
 	def read_halofile(self, halofile):
 		now = time.time()
