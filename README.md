@@ -85,5 +85,5 @@ cluster = Clustering(rbins)
 ```
 The input mock should have first 6 columns as x, y, z, vx, vy, vz.
 ```python
-xi0, xi2, wp = cluster.xi_wp_cubic_mock(mock[:,1:], size=1000, verbose=True)
+xi0, xi2, wp = cluster.xi_wp_cubic_mock(mock[:,1:], size=1000, xi_name="../data/xi.dat", wp_name="../data/wp.dat", verbose=True)
 ```
