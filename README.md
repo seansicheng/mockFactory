@@ -2,17 +2,17 @@
 Python implementation of mockFactory, right now populateSimulationHOD is implemented. Use it to make mocks and compute clustering.
 
 ## Requirements
-Python 3.6
+`Python 3.6`
 
-numpy
+`numpy`
 
-pandas
+`pandas`
 
-colossus, for calculating halo concentration
+`colossus`, for calculating halo concentration
 
-if you want to use clustering module, Corrfunc is required
+if you want to use clustering module, `Corrfunc` is required
 
-if you want to use MCMC module, emcee is required
+if you want to use MCMC module, `emcee` is required
 
 ## Usage
 ### Initialization
