@@ -1,5 +1,6 @@
 import time 
 import numpy as np
+import functools
 from colossus.cosmology import cosmology
 cosmology.setCosmology('planck15')
 from colossus.halo import concentration
@@ -12,6 +13,8 @@ def timeWrapper(func):
 	"""
 
 	def newfunc(*arg, **kwarg):
+		if "verbose" in kwarg and kwarg["verbose"] == False:
+			return func(*arg, **kwarg)
 		now = time.time()
 		cls = arg[0]
 		print("[{}] Begin {} ...".format(cls.__class__.__name__, func.__name__))

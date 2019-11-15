@@ -3,14 +3,14 @@ import pandas as pd
 import numpy as np
 from parameters import *
 from utils import timeWrapper, HaloConcentration
-
+from hod import HOD
 
 class MockFactory(object):
 	"""
 		docstring for MockFactory
 	"""
 
-	def __init__(self, halofile, boxsize, vbias_c=0, vbias=0, cvir_fac=1):
+	def __init__(self, halofile, boxsize, vbias_c=0, vbias=0, cvir_fac=1, hod_parameters = {}):
 
 		"""
 			input:
@@ -19,6 +19,7 @@ class MockFactory(object):
 				boxsize is the size of halo catalog
 
 		"""
+		self.hod = HOD(**hod_parameters)
 
 		self.halofile = halofile
 		self.boxsize = boxsize
@@ -26,12 +27,7 @@ class MockFactory(object):
 		self.vbias = vbias
 		self.cvir_fac = cvir_fac
 
-		now = time.time()
-		print("[{}] Reading halo file {} ...".format(self.__class__.__name__, halofile))
-		self.halos = pd.read_table(self.halofile, header=None, delimiter=' ').values
-		print("[{}] Done reading halo file, time cost {:.2f}s ...".format(self.__class__.__name__, time.time() - now))
-		print("MAX HALOMASS {}".format(np.log10(max(self.halos[:,0]))))
-		print("MAX HALOMASS {}".format(np.log10(min(self.halos[:,0]))))
+		self.read_halofile(halofile)		
 
 		print("[{}] Adjusting position ...".format(self.__class__.__name__))
 		self.position_adjust(self.halos[:,1])
@@ -39,16 +35,41 @@ class MockFactory(object):
 		self.position_adjust(self.halos[:,3])
 		print("[{}] Done adjusting position ...".format(self.__class__.__name__))
 		
-		#self.halos.columns = ["M200b", "x", "y", "z", "vx", "vy", "vz"]
-		
 		print("[{}] Computing halo concentration ...".format(self.__class__.__name__))
 		hc = HaloConcentration(z=0.84)
-		self.cvir = hc.haloConcentration(self.halos[:,0]) * self.cvir_fac
+		self.cvir = hc.haloConcentration(self.halos[:,0])
 		self.rvir = pow(3*self.halos[:,0] / (4*DELTA_HALO*np.pi*RHO_CRIT*OMEGA_M), 1.0/3.0)
 
 		self.halolength = len(self.halos)
 		self.index = np.arange(self.halolength)
 		print("[{}] Read {} halos ...".format(self.__class__.__name__, self.halolength))
+
+	def read_halofile(self, halofile):
+		now = time.time()
+		print("[{}] Reading halo file {} ...".format(self.__class__.__name__, halofile))
+		self.halos = pd.read_table(self.halofile, header=None, delimiter=' ').values
+		print("[{}] Done reading halo file, time cost {:.2f}s ...".format(self.__class__.__name__, time.time() - now))
+		print("MAX HALOMASS {}".format(np.log10(max(self.halos[:,0]))))
+		print("MAX HALOMASS {}".format(np.log10(min(self.halos[:,0]))))
+		return
+
+	def update_params(self, params):
+		if type(params) != dict:
+			raise ValueError("params must be dict")
+		print("Updating params ...")
+		hod_p, hod_val = [], []
+		for key, val in params.items():
+			if key == "vbias_c":
+				self.vbias_c = val
+			elif key == "vbias":
+				self.vbias = val
+			elif key == "cvir_fac":
+				self.cvir_fac = val
+			else:
+				hod_p.append(key)
+				hod_val.append(val)
+		self.hod.update_parameters(quantities = hod_p, values = hod_val)
+		return
 
 
 
@@ -75,15 +96,15 @@ class MockFactory(object):
 	def NFWDensity(r, rs, ps):
 		return ps * rs / (r*(1+r/rs)*(1+r/rs))
 
-	@classmethod
-	def NFWPosition(cls, rvir, cvir):
-		rs = rvir/cvir
-		max_p = cls.NFWDensity(rs,rs,1.0)*rs*rs*4.0*np.pi
+
+	def NFWPosition(self, rvir, cvir):
+		rs = rvir/(cvir * self.cvir_fac)
+		max_p = self.NFWDensity(rs,rs,1.0)*rs*rs*4.0*np.pi
 		it = 0
 		while True:
 			it += 1
 			r = np.random.rand() * rvir
-			pr = cls.NFWDensity(r,rs,1.0)*r*r*4.0*np.pi / max_p
+			pr = self.NFWDensity(r,rs,1.0)*r*r*4.0*np.pi / max_p
 
 			if np.random.rand() <= pr:
 				#print(it)
@@ -95,12 +116,13 @@ class MockFactory(object):
 
 
 	@timeWrapper
-	def populateCentral(self, hod):
-		Ncen = hod.N_cen(self.halos[:,0])
+	def _populateCentral(self, verbose):
+		Ncen = self.hod.N_cen(self.halos[:,0])
 		rand = np.random.rand(self.halolength)
 		cen_mock = np.zeros((len(self.halos[Ncen > rand]), 8))
 		cen_mock[:,:-1] = self.halos[Ncen > rand]
-		print("number of central is {}".format(len(cen_mock)))
+		if verbose:
+			print("number of central is {}".format(len(cen_mock)))
 		vg = np.array([self.NFWCenVelocity(m) for m in cen_mock[:,0]])
 		cen_mock[:,4] += vg[:,0]
 		cen_mock[:,5] += vg[:,1]
@@ -111,15 +133,15 @@ class MockFactory(object):
 
 
 	@timeWrapper
-	def populateSatellite(self, hod):
+	def _populateSatellite(self, verbose):
 		Nsat = np.zeros(self.halolength).astype(int)
-		nsat = hod.N_sat(self.halos[:,0])
+		nsat = self.hod.N_sat(self.halos[:,0])
 		Nsat[nsat != 0] = np.random.poisson(nsat[nsat!=0])
 		#Nsat = Nsat.astype(int)
-		print("assign position and velocity...")
 		xg, yg, zg, vxg, vyg, vzg, mass = [], [], [], [], [], [], []
-		print("number of satellite is {}".format(sum(Nsat)))
-		t = time.time()
+		if verbose:
+			print("assign position and velocity...")
+			print("number of satellite is {}".format(sum(Nsat)))
 		for i in self.index[Nsat != 0]:
 			for j in range(Nsat[i]):
 				r = self.NFWPosition(self.rvir[i], self.cvir[i])
@@ -133,7 +155,6 @@ class MockFactory(object):
 				vzg.append(self.halos[i, 6]+vg[2])
 
 				mass.append(self.halos[i, 0])
-		print("for loop takes {:.2f} s".format(time.time() - t))
 		sat_mock = np.array([mass, xg, yg, zg, vxg, vyg, vzg, [0]*len(mass)]).T
 		self.position_adjust(sat_mock[:,1])
 		self.position_adjust(sat_mock[:,2])
@@ -142,14 +163,13 @@ class MockFactory(object):
 		return sat_mock
 
 	@timeWrapper
-	def populateSimulationHOD(self, hod, mock_flnm = None):
+	def populateSimulation(self, mock_flnm = None, verbose = True):
 		"""
 			input:
 			----------
-				hod is an instance of HOD class
 				mock_flnm is the output mock filename
 		"""
-		mock = np.concatenate([self.populateCentral(hod), self.populateSatellite(hod)])
+		mock = np.concatenate([self._populateCentral(verbose = verbose), self._populateSatellite(verbose = verbose)])
 		if mock_flnm:
 			print("Writing to csv ...")
 			np.savetxt(mock_flnm, mock, fmt="%.5f")
