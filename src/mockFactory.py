@@ -36,7 +36,7 @@ class MockFactory(object):
 		print("[{}] Done adjusting position ...".format(self.__class__.__name__))
 		
 		print("[{}] Computing halo concentration ...".format(self.__class__.__name__))
-		hc = HaloConcentration(z=0.84)
+		hc = HaloConcentration(z=REDSHIFT)
 		self.cvir = hc.haloConcentration(self.halos[:,0])
 		self.rvir = pow(3*self.halos[:,0] / (4*DELTA_HALO*np.pi*RHO_CRIT*OMEGA_M), 1.0/3.0)
 
@@ -172,7 +172,7 @@ class MockFactory(object):
 		"""
 		mock = np.concatenate([self._populateCentral(verbose = verbose), self._populateSatellite(verbose = verbose)])
 		if mock_flnm:
-			print("Writing to csv ...")
+			print("Writing to file {} ...".format(mock_flnm))
 			np.savetxt(mock_flnm, mock, fmt="%.5f")
 
 		return mock
